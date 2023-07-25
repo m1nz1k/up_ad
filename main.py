@@ -7,54 +7,57 @@ import keyboard
 import math
 import pickle
 import time
+import concurrent.futures
+import asyncio
 
-# options
-chrome_options = webdriver.ChromeOptions()
-# Юзер-Агент
-chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36")
-# Запуск в фоновом режиме. Пока не включаем.
-# chrome_options.add_argument('--headless')
-chrome_options.add_argument("--no-sandbox")
-
-# Передаем параметры в driver
-driver = webdriver.Chrome(options=chrome_options)
 
 # Функция, выполняющая основную работу.
-def up_ad(url):
+def up_ad(url, login, password):
+    # options
+    chrome_options = webdriver.ChromeOptions()
+    # Юзер-Агент
+    chrome_options.add_argument(
+        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36")
+    # Запуск в фоновом режиме. Пока не включаем.
+    # chrome_options.add_argument('--headless')
+    chrome_options.add_argument("--no-sandbox")
+
+    # Передаем параметры в driver
+    driver = webdriver.Chrome(options=chrome_options)
     # Открываем на весь экран
     driver.maximize_window()
     # Переходим по ссылке
     driver.get(url)
-    auth = driver.find_element(By.ID, 'js-modal2').click()
-    # Ждем, пока форма станет видимой
-    login_form = WebDriverWait(driver, 10).until(
-        EC.visibility_of_element_located((By.ID, 'js-login-form'))
-    )
+    # Процесс авторизации.
+    try:
+        auth = driver.find_element(By.ID, 'js-modal2').click()
+        # Ждем, пока форма станет видимой
+        login_form = WebDriverWait(driver, 10).until(
+            EC.visibility_of_element_located((By.ID, 'js-login-form'))
+        )
 
-    # Вводим логин и пароль
-    email_input = login_form.find_element(By.NAME, 'email')
-    email_input.send_keys('aborodin11')
+        # Вводим логин и пароль
+        email_input = login_form.find_element(By.NAME, 'email')
+        email_input.send_keys(f'{login}')
 
-    password_input = login_form.find_element(By.NAME, 'password')
-    password_input.send_keys('sYqba3-wijsuw-cuqcem')
+        password_input = login_form.find_element(By.NAME, 'password')
+        password_input.send_keys(f'{password}')
+    except Exception as ex:
+        print(ex)
+        print('Не найдено кнопка для авторизации, или поля с логином и паролем.')
     print("Для продолжения нажмите Shift+H")
-    keyboard.wait('shift+h')
-    print("Вы нажали Shift+H! Продолжаем выполнение кода.")
+    # Жмем сочетание клавиш Shift+h только после того, как авторизируемся на всех аккаунтах.
+    while True:
+        if keyboard.is_pressed('shift+h'):
+            print("Вы нажали Shift+H! Продолжаем выполнение кода.")
+            break
+        time.sleep(0.1)
 
-    # # Время на прохождение капчи и двухфакторки.
-    # time.sleep(5)
-    # # Сохраняем куки для дальнейшей работы.
-    # pickle.dump(driver.get_cookies(), open("aborodin11_cookies", "wb"))
-    # time.sleep(30)
-    #
-    # # Загружаем куки от аккаунта для дальнейшей работы/
-    # for cookie in pickle.load(open("aborodin11_cookies", "rb")):
-    #     driver.add_cookie(cookie)
-    time.sleep(5)
     while True:
         print('Начал новый цикл.')
         # Переходим в профиль аккаунта.
-        driver.get(f'{url}/profile/aborodin11')
+        driver.get(f'{url}/profile/{login}')
+        time.sleep(5)
 
         # Ищем строку с количеством элементов.
         total = driver.find_element(By.CSS_SELECTOR, 'h2.profile__posts-title')
@@ -81,8 +84,8 @@ def up_ad(url):
                 # Нажмем на кнопку "UP"
                 up_button.click()
 
-                # Подождем 10 секунд перед следующим нажатием
-                time.sleep(1)
+                # Ожидание до следующего клика.
+                time.sleep(rounded_value)
             except NoSuchElementException:
                 print("Кнопка 'UP' не найдена в текущем элементе")
                 try:
@@ -93,11 +96,28 @@ def up_ad(url):
                     file.writelines(f"Кнопка не была найдена : {url} : {name}")
         print('Закончил')
 
+# Функция для парсинга данных из файла
+def parse_config_file(file_path):
+    with open(file_path, 'r') as file:
+        lines = file.readlines()
+    return [line.strip().split('|') for line in lines]
 
 
 
 def main():
-    up_ad('https://accs-market.com')
+    # Парсим данные из файла
+    config_data = parse_config_file('config.txt')
+
+    # Создаем и запускаем потоки для каждой строки из файла
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = [executor.submit(up_ad, data[0], data[1], data[2]) for data in config_data]
+
+        # Ждем завершения всех потоков
+        for future in concurrent.futures.as_completed(futures):
+            try:
+                future.result()
+            except Exception as e:
+                print(f"Поток завершился с ошибкой: {e}")
 
 # Точка входа.
 if __name__ == '__main__':
