@@ -5,10 +5,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import keyboard
 import math
-import pickle
 import time
 import concurrent.futures
-import asyncio
 
 
 # Функция, выполняющая основную работу.
@@ -21,6 +19,10 @@ def up_ad(url, login, password):
     # Запуск в фоновом режиме. Пока не включаем.
     # chrome_options.add_argument('--headless')
     chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
 
     # Передаем параметры в driver
     driver = webdriver.Chrome(options=chrome_options)
@@ -54,47 +56,62 @@ def up_ad(url, login, password):
         time.sleep(0.1)
 
     while True:
-        print('Начал новый цикл.')
-        # Переходим в профиль аккаунта.
-        driver.get(f'{url}/profile/{login}')
-        time.sleep(5)
+        try:
+            print('Начал новый цикл.')
+            # Переходим в профиль аккаунта.
+            driver.get(f'{url}/profile/{login}')
+            time.sleep(5)
 
-        # Ищем строку с количеством элементов.
-        total = driver.find_element(By.CSS_SELECTOR, 'h2.profile__posts-title')
-        # Отделяем число
-        listing_text = total.text
-        listing_value = int(listing_text.split('(')[1].split(')')[0].strip())
+            # Ищем строку с количеством элементов.
+            total = driver.find_element(By.CSS_SELECTOR, 'h2.profile__posts-title')
+            # Отделяем число
+            listing_text = total.text
+            listing_value = int(listing_text.split('(')[1].split(')')[0].strip())
 
-        # Определяем промежуток нажатия на кнопку по формуле: 5 дней (в секундах) делим на количество карточек (с округлением в > + 1 сек).
-        wait_click = 432000 / int(listing_value)
-        rounded_value = math.ceil(wait_click)
+            # Определяем промежуток нажатия на кнопку по формуле: 5 дней (в секундах) делим на количество карточек (с округлением в > + 1 сек).
+            wait_click = 432000 / int(listing_value)
+            rounded_value = math.ceil(wait_click)
 
-        # Ждем некоторое время, чтобы страница загрузилась
-        time.sleep(5)
+            # Ждем некоторое время, чтобы страница загрузилась
+            time.sleep(5)
 
-        # Найдем все li элементы с классом profile__post
-        li_elements = driver.find_elements(By.CSS_SELECTOR, 'li.profile__post')
+            # Найдем все li элементы с классом profile__post
+            li_elements = driver.find_elements(By.CSS_SELECTOR, 'li.profile__post')
 
-        # Итерируемся по каждому li элементу
-        for li_element in li_elements:
-            try:
-                # Найдем кнопку "UP" внутри текущего li элемента
-                up_button = li_element.find_element(By.CSS_SELECTOR, 'a.up-group-profile')
+            # Итерируемся по каждому li элементу
+            for li_element in li_elements:
+                while True:  # Бесконечный цикл для повторной попытки нажатия на кнопку
+                    try:
+                        # Найдем кнопку "UP" внутри текущего li элемента
+                        up_button = li_element.find_element(By.CSS_SELECTOR, 'a.up-group-profile')
 
-                # Нажмем на кнопку "UP"
-                up_button.click()
+                        # Нажмем на кнопку "UP"
+                        up_button.click()
 
-                # Ожидание до следующего клика.
-                time.sleep(rounded_value)
-            except NoSuchElementException:
-                print("Кнопка 'UP' не найдена в текущем элементе")
-                try:
-                    name = driver.find_element(By.TAG_NAME, 'b').text
-                except Exception as ex:
-                    name = ex
-                with open('log.txt', 'a', encoding='utf-8') as file:
-                    file.writelines(f"Кнопка не была найдена : {url} : {name}")
-        print('Закончил')
+                        # Ожидание до следующего клика.
+                        time.sleep(rounded_value)
+
+                        # Если удалось нажать кнопку, выходим из бесконечного цикла
+                        break
+
+                    except Exception as internet:
+                        print("Возможна проблема с интернетом. Ждем 10 секунд и повторяем попытку!")
+                        try:
+                            name = driver.find_element(By.TAG_NAME, 'b').text
+                        except Exception as ex:
+                            name = ex
+                        with open('log.txt', 'a', encoding='utf-8') as file:
+                            file.writelines(f"Кнопка не была найдена: {url} : {name}. Ошибка: {internet}")
+
+                        # Ждем 10 секунд перед повторной попыткой найти и нажать кнопку
+                        time.sleep(10)
+
+            print('Закончил')
+        except Exceptionas as ex:
+            print('Ошибка в цикле.')
+            with open('log.txt', 'a', encoding='utf-8') as file:
+                file.writelines(f"Ошибка в цикле: {ex}")
+
 
 # Функция для парсинга данных из файла
 def parse_config_file(file_path):
